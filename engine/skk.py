@@ -683,12 +683,25 @@ class UsrDict(DictBase):
         elements.insert(0, candidate)
         self.__dict_changed = True
 
+    def purge_candidate(self, midasi, candidate):
+        '''Remove CANDIDATE from the list of candidates for MIDASI.'''
+        candidates = self.__dict[midasi]
+        for _candidate in candidates:
+            if _candidate[0] == candidate:
+                candidates.remove(_candidate)
+                self.__dict_changed = True
+
 class SkkServ(DictBase):
+    # Workaround for
+    # http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=583784
+    # Some servers read extra dictionaries encoded in EUC-JIS-2004.
+    ENCODING = 'EUC-JIS-2004'
+
     HOST='localhost'
     PORT=1178
     BUFSIZ = 4096
 
-    def __init__(self, host=HOST, port=PORT, encoding=DictBase.ENCODING):
+    def __init__(self, host=HOST, port=PORT, encoding=ENCODING):
         self.__host = host
         self.__port = port
         self.__encoding = encoding
@@ -1074,6 +1087,8 @@ class Context(object):
     def __leave_dict_edit(self):
         dict_edit_output = self.__current_state().dict_edit_output
         self.__abort_dict_edit()
+        if len(dict_edit_output) == 0:
+            return None
         self.__current_state().candidates.insert(0, (dict_edit_output, None))
         self.__candidate_selector.set_index(0)
         output = self.kakutei()
@@ -1431,6 +1446,14 @@ class Context(object):
             elif str(key) == 'x':
                 if self.previous_candidate() is None:
                     self.__current_state().conv_state = CONV_STATE_START
+                return (True, u'')
+            elif key.letter == 'X':
+                self.__usrdict.purge_candidate(self.__current_state().midasi,
+                                               self.__candidate_selector.candidate()[0])
+                input_mode = self.__current_state().input_mode
+                self.reset()
+                self.activate_input_mode(input_mode)
+                self.__current_state().conv_state = CONV_STATE_NONE
                 return (True, u'')
             else:
                 output = self.kakutei()
